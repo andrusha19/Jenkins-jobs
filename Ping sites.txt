@@ -1,0 +1,56 @@
+// This pipeline ping array of sites. If answer is not 200, it will try 30 times to ping.
+// And if half of pings return not 200, it failes and send Telegram message for each failed site.
+
+// This job is parametrized with multi-string parameter "site_urls".
+// It needs two additional jobs:
+// - 'Ping one site' - freestyle job, based on 'Site monitor' plugin. It is parametrized with string 'site_url' parameter.
+// - 'Send Telegram Message' - freestyle job, based on 'Telegram notification' plugin. It is parametrized with string 'Telegram_message' parameter.
+
+def site_names = site_urls.readLines();
+def stepsForParallel = site_names.collectEntries {site ->
+    ["Ping ${site}" : PingSiteAndInform(site)]
+}
+parallel stepsForParallel;
+
+def PingSiteAndInform(site_url){
+    return {
+        node{
+            stage('Ping ' + site_url){
+                def builds_counter = 30;
+                def failed_builds_counter = 0;  
+                def sleep_period = 5;           //seconds to sleep
+                def jobResult = '';
+                //First try
+                def jobBuildResult = build( job : 'Ping/Ping one site', propagate: false,
+                                parameters: [string(name:'dummy', value: "${site_url}"),
+                                    string(name:'site_url', value: "${site_url}")]
+                );
+                jobResult = jobBuildResult.getResult(); 
+                echo 'Ping result: ' + jobResult;
+                
+                if(jobResult != 'SUCCESS'){
+                    while(builds_counter > 0){
+                        jobBuildResult = build( job : 'Ping one site', propagate: false,
+                                        parameters: [string(name:'dummy', value: "${site_url}"),
+                                            string(name:'site_url', value: "${site_url}")]
+                        );
+                        jobResult = jobBuildResult.getResult(); 
+                        if(jobResult != 'SUCCESS'){
+                            failed_builds_counter = failed_builds_counter + 1;
+                        }
+                        builds_counter = builds_counter - 1;
+                        echo 'Ping result: ' + jobResult;
+                        sleep sleep_period;
+                    }
+                }        
+                
+                if(failed_builds_counter > 14){
+                    build( job : 'Send Telegram Message', propagate: false, 
+                        parameters: [string(name:'dummy', value: "${site_url}"),
+                                    string(name:'Telegram_message', value: "Ping ${site_url} was failed!")]
+                    );
+                }
+            }
+        }
+    }    
+}
