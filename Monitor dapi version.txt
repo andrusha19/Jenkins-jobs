@@ -1,5 +1,5 @@
 // This pipeline requests json from site and ckeckes engine_version variable. If answer is not 200, it will start new job.
-// If answer is 200 it will ckecks if variable engine_version changed from previous build.
+// If answer is 200 it will ckecks if variable engine_version changed from previous build and then send Telegram notification.
 
 // This job is parametrized with string parameter "api_url".
 // This job is parametrized with string parameter "engine_version".
