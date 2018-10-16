@@ -1,0 +1,50 @@
+// This pipeline requests json from site and ckeckes engine_version variable. If answer is not 200, it will start new job.
+// If answer is 200 it will ckecks if variable engine_version changed from previous build.
+
+// This job is parametrized with string parameter "api_url".
+// This job is parametrized with string parameter "engine_version".
+// It needs one additional job:
+// - 'Send Telegram Message' - freestyle job, based on 'Telegram notification' plugin. It is parametrized with string 'Telegram_message' parameter.
+
+import groovy.json.JsonSlurperClassic 
+
+def sleep_period = 5 * 60;
+
+def jsonParse(def json_text) {
+    new groovy.json.JsonSlurperClassic().parseText(json_text)
+}
+
+node{
+    stage('Check dapi engine version'){
+        sleep sleep_period;
+        def connection = new URL(api_url).openConnection();
+        def getRC = connection.getResponseCode();
+        if(getRC.equals(200)) {
+            def response_body = connection.getInputStream().getText();
+            def json = jsonParse(response_body);
+            def newVersion = json.engine_version;
+            println("Received: ${newVersion}");
+
+            println("Previous: ${engine_version}");
+            if(engine_version != 'default' && newVersion != engine_version){
+                
+                println("Dapi engine version changed from ${engine_version} to ${newVersion}!");
+                build( job : 'Send Telegram Message', propagate: false, wait: false,
+                        parameters: [string(name:'dummy', value: "${engine_version}"),
+                            string(name:'Telegram_message', value: 
+                            "Dapi engine version changed from ${engine_version} to ${newVersion}!")]
+                    );
+            }
+            
+            engine_version = newVersion;
+        }
+        
+        println("Starting new job");
+        build( job : 'Periodic/Monitor dapi version', propagate: false,
+                wait: false,
+                parameters: [string(name:'dummy', value: "${engine_version}"),
+                    string(name:'api_url', value: "${api_url}"),
+                    string(name:'engine_version', value: "${engine_version}")]
+            );
+    }
+}
