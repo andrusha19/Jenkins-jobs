@@ -17,26 +17,30 @@ def jsonParse(def json_text) {
 node{
     stage('Check dapi engine version'){
         sleep sleep_period;
-        def connection = new URL(api_url).openConnection();
-        def getRC = connection.getResponseCode();
-        if(getRC.equals(200)) {
-            def response_body = connection.getInputStream().getText();
-            def json = jsonParse(response_body);
-            def newVersion = json.engine_version;
-            println("Received: ${newVersion}");
-
-            println("Previous: ${engine_version}");
-            if(engine_version != 'default' && newVersion != engine_version){
+        try{
+            def connection = new URL(api_url).openConnection();
+            def getRC = connection.getResponseCode();
+            if(getRC.equals(200)) {
+                def response_body = connection.getInputStream().getText();
+                def json = jsonParse(response_body);
+                def newVersion = json.engine_version;
+                println("Received: ${newVersion}");
+    
+                println("Previous: ${engine_version}");
+                if(engine_version != 'default' && newVersion != engine_version){
+                    
+                    println("Dapi engine version changed from ${engine_version} to ${newVersion}!");
+                    build( job : 'Send Telegram Message', propagate: false, wait: false,
+                            parameters: [string(name:'dummy', value: "${engine_version}"),
+                                string(name:'Telegram_message', value: 
+                                "Dapi engine version changed from ${engine_version} to ${newVersion}!")]
+                        );
+                }
                 
-                println("Dapi engine version changed from ${engine_version} to ${newVersion}!");
-                build( job : 'Send Telegram Message', propagate: false, wait: false,
-                        parameters: [string(name:'dummy', value: "${engine_version}"),
-                            string(name:'Telegram_message', value: 
-                            "Dapi engine version changed from ${engine_version} to ${newVersion}!")]
-                    );
+                engine_version = newVersion;
             }
-            
-            engine_version = newVersion;
+        }catch(Exception ex){
+            println("Exception in request");
         }
         
         println("Starting new job");
@@ -48,3 +52,4 @@ node{
             );
     }
 }
+
